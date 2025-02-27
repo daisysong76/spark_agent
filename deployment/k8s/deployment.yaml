@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-agent-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ai-agent
+  template:
+    metadata:
+      labels:
+        app: ai-agent
+    spec:
+      containers:
+      - name: ai-agent-container
+        image: your-registry/ai-agent:prod-latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: TWILIO_ACCOUNT_SID
+          valueFrom:
+            secretKeyRef:
+              name: ai-agent-secrets
+              key: twilio_account_sid
+        - name: TWILIO_AUTH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: ai-agent-secrets
+              key: twilio_auth_token
+        # etc. for all environment variables
+        # consider storing them in K8s secrets
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1"
+          limits:
+            memory: "4Gi"
+            cpu: "2"
+
+# deployment/k8s/service.yaml for exposing the service internally or externally

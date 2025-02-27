@@ -1,0 +1,77 @@
+name: CI-CD for Big Data AI Agent
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Dependencies
+        run: |
+          pip install -r data_ingestion/requirements.txt
+          pip install -r embedding_generation/requirements.txt
+          pip install -r ai_agent/requirements.txt
+
+      - name: Configure Spark / Hadoop environment
+        run: |
+          # If you're using a self-hosted runner that already has Spark,
+          # just ensure the correct versions are set in PATH.
+          # For demonstration, let's assume a simplified environment.
+          echo "Spark config steps here..."
+
+      - name: Data Ingestion
+        run: |
+          spark-submit \
+            --master yarn \
+            data_ingestion/spark_ingestion.py \
+            --input s3://my-bucket/raw/ \
+            --output s3://my-bucket/staging-ingested/
+
+      - name: Data Cleaning
+        run: |
+          spark-submit \
+            --master yarn \
+            data_ingestion/spark_cleaning.py \
+            --input s3://my-bucket/staging-ingested/ \
+            --output s3://my-bucket/cleaned/
+
+      - name: Embedding Generation
+        run: |
+          spark-submit \
+            --master yarn \
+            embedding_generation/spark_generate_embeddings.py \
+            --input s3://my-bucket/cleaned/ \
+            --output s3://my-bucket/embeddings/
+
+      - name: Vector DB Updates
+        run: |
+          python vector_store/store_embeddings.py \
+            --embedding_dir s3://my-bucket/embeddings/ \
+            --milvus_host <your_milvus_host> \
+            --milvus_port <your_milvus_port> \
+            --collection_name documents
+
+      - name: Build Docker Image
+        run: |
+          docker build -t my-registry/my-ai-agent:latest ai_agent/.
+          echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
+          docker push my-registry/my-ai-agent:latest
+
+      - name: Deploy to Kubernetes
+        run: |
+          kubectl apply -f deployment/k8s/deployment.yaml
+          kubectl apply -f deployment/k8s/service.yaml
